@@ -1,0 +1,122 @@
+name: EP_DESCR
+blocks:
+  - name: BANK0
+    registers:
+      - name: ADDR
+        size_bytes: 4
+        default_value: 0
+        fields:
+          - name: ADDR
+            start_bit: 0
+            bit_count: 32
+      - name: PCKSIZE
+        size_bytes: 4
+        default_value: 0
+        fields:
+          - name: BYTE_COUNT
+            start_bit: 0
+            bit_count: 14
+          - name: MULTI_PACKET_SIZE
+            start_bit: 14
+            bit_count: 14
+          - name: SIZE
+            start_bit: 28
+            bit_count: 3
+            values:
+              - name: BYTES8
+                value: 0
+              - name: BYTES16
+                value: 1
+              - name: BYTES32
+                value: 2
+              - name: BYTES64
+                value: 3
+              - name: BYTES128
+                value: 4
+              - name: BYTES256
+                value: 5
+              - name: BYTES512
+                value: 6
+              - name: BYTES1023
+                value: 7
+          - name: AUTO_ZLP
+            start_bit: 31
+            bit_count: 1
+      - name: EXTREG
+        size_bytes: 4
+        default_value: 0
+        fields:
+          - name: SUBPID
+            start_bit: 0
+            bit_count: 4
+          - name: VARIABLE
+            start_bit: 4
+            bit_count: 11
+      - name: STATUS_BK
+        size_bytes: 1
+        default_value: 0
+        fields:
+          - name: CRCERR
+            start_bit: 0
+            bit_count: 1
+          - name: ERRORFLOW
+            start_bit: 0
+            bit_count: 1
+      - type: reserved
+        size_bytes: 3
+  - name: BANK1
+    registers:
+      - name: ADDR
+        size_bytes: 4
+        default_value: 0
+        fields:
+          - name: ADDR
+            start_bit: 0
+            bit_count: 32
+      - name: PCKSIZE
+        size_bytes: 4
+        default_value: 0
+        fields:
+          - name: BYTE_COUNT
+            start_bit: 0
+            bit_count: 14
+          - name: MULTI_PACKET_SIZE
+            start_bit: 14
+            bit_count: 14
+          - name: SIZE
+            start_bit: 28
+            bit_count: 3
+            values:
+              - name: BYTES8
+                value: 0
+              - name: BYTES16
+                value: 1
+              - name: BYTES32
+                value: 2
+              - name: BYTES64
+                value: 3
+              - name: BYTES128
+                value: 4
+              - name: BYTES256
+                value: 5
+              - name: BYTES512
+                value: 6
+              - name: BYTES1023
+                value: 7
+          - name: AUTO_ZLP
+            start_bit: 31
+            bit_count: 1
+      - type: reserved
+        size_bytes: 4
+      - name: STATUS_BK
+        size_bytes: 1
+        default_value: 0
+        fields:
+          - name: CRCERR
+            start_bit: 0
+            bit_count: 1
+          - name: ERRORFLOW
+            start_bit: 0
+            bit_count: 1
+      - type: reserved
+        size_bytes: 3
