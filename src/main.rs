@@ -73,7 +73,7 @@ fn serialize_field_writer(register_backing_type: &Ident, field: &VariableField) 
         #[inline]
         pub fn #field_name_lower (&mut self, value: #value_type_ident ) -> &mut Self {
             self.register.value = (self.register.value & ( #register_backing_type :: MAX ^ #bit_mask_in_position ))
-                | ( #value_numeric << #shift_count ) & #bit_mask_in_position;
+                | (( #value_numeric << #shift_count ) & #bit_mask_in_position);
             self
         }
     }
