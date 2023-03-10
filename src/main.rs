@@ -252,7 +252,7 @@ fn serialize_block_def(block: &Block) -> TokenStream {
         }
 
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[repr(packed)]
+        #[repr(C)]
         pub struct #block_name_upper {
             #( #register_fields )*
         }
@@ -316,7 +316,7 @@ fn serialize_group(group: &Group) -> TokenStream {
         }
 
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        #[repr(packed)]
+        #[repr(C)]
         pub struct #group_name_upper {
             #( #group_block_fields )*
         }
