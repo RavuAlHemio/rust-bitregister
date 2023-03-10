@@ -2,6 +2,7 @@ mod model;
 
 
 use std::fs::File;
+use std::io::Write;
 use std::path::PathBuf;
 
 use clap::Parser;
@@ -16,6 +17,9 @@ use crate::model::{Block, Field, Group, Register, RegisterOrReserved, VariableFi
 struct Opts {
     /// The model definition file, used as an input.
     pub model_file: PathBuf,
+
+    /// The Rust source file, used as an output.
+    pub rust_file: PathBuf,
 }
 
 fn integer_type_for_bit_count(bit_count: u8) -> &'static str {
@@ -257,5 +261,11 @@ fn main() {
     };
 
     let group_tokens = serialize_group(&group);
-    println!("{}", group_tokens);
+
+    {
+        let mut f = File::create(&opts.rust_file)
+            .expect("failed to create Rust file");
+        write!(f, "{}", group_tokens)
+            .expect("failed to write to Rust file");
+    }
 }
