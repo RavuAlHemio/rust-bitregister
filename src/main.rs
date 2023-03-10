@@ -141,6 +141,7 @@ fn serialize_register_def(register: &Register) -> TokenStream {
     };
 
     quote! {
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[repr(transparent)]
         pub struct #register_name_upper {
             value: #register_backing_type ,
@@ -250,6 +251,7 @@ fn serialize_block_def(block: &Block) -> TokenStream {
             #( #register_defs )*
         }
 
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[repr(packed)]
         pub struct #block_name_upper {
             #( #register_fields )*
@@ -313,6 +315,7 @@ fn serialize_group(group: &Group) -> TokenStream {
             #( #group_block_defs )*
         }
 
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[repr(packed)]
         pub struct #group_name_upper {
             #( #group_block_fields )*
