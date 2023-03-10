@@ -13,6 +13,12 @@ pub struct Group {
     /// The blocks of which this group consists.
     pub blocks: Vec<Block>,
 }
+impl Group {
+    pub fn has_default(&self) -> bool {
+        self.blocks.iter()
+            .all(|b| b.has_default())
+    }
+}
 
 /// A block of consecutive registers.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -22,6 +28,15 @@ pub struct Block {
 
     /// The registers or paddings in this block.
     pub registers: Vec<RegisterOrReserved>,
+}
+impl Block {
+    pub fn has_default(&self) -> bool {
+        self.registers.iter()
+            .all(|ror| match ror {
+                RegisterOrReserved::Register(r) => r.default_value.is_some(),
+                RegisterOrReserved::Reserved(_) => true,
+            })
+    }
 }
 
 /// A register or padding value.
@@ -33,6 +48,16 @@ pub enum RegisterOrReserved {
 
     /// A reserved value.
     Reserved(ReservedValue),
+}
+impl RegisterOrReserved {
+    /// The size of this register or reserved value in bytes.
+    #[inline]
+    pub fn size_bytes(&self) -> u8 {
+        match self {
+            Self::Register(r) => r.size_bytes,
+            Self::Reserved(r) => r.size_bytes,
+        }
+    }
 }
 
 /// A block of consecutive registers.

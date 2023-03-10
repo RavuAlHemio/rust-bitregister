@@ -99,7 +99,7 @@ fn serialize_register_def(register: &Register) -> TokenStream {
         })
         .collect();
 
-    let (write_func, default_impl, register_writer) = if let Some(default_value) = register.default_value {
+    let (write_func, const_default_func, default_impl, register_writer) = if let Some(default_value) = register.default_value {
         let default_value_token = Literal::u64_unsuffixed(default_value);
         let wf = quote! {
             #[inline]
@@ -108,9 +108,13 @@ fn serialize_register_def(register: &Register) -> TokenStream {
                 #register_writer_upper { register: self }
             }
         };
+        let cd = quote! {
+            #[inline]
+            pub const fn const_default() -> Self { Self { value: #default_value_token } }
+        };
         let d = quote! {
             impl Default for #register_name_upper {
-                fn default() -> Self { Self { value: #default_value_token } }
+                fn default() -> Self { Self::const_default() }
             }
         };
         let register_writer_fields: Vec<TokenStream> = register.fields.iter()
@@ -127,12 +131,13 @@ fn serialize_register_def(register: &Register) -> TokenStream {
                 #( #register_writer_fields )*
             }
         };
-        (wf, d, rw)
+        (wf, cd, d, rw)
     } else {
         let wf = quote! {};
+        let cd = quote! {};
         let d = quote! {};
         let rw = quote! {};
-        (wf, d, rw)
+        (wf, cd, d, rw)
     };
 
     quote! {
@@ -147,6 +152,8 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             }
 
             #write_func
+
+            #const_default_func
         }
         #default_impl
 
@@ -185,23 +192,58 @@ fn serialize_block_def(block: &Block) -> TokenStream {
     let block_name_upper = Ident::new(&block.name.to_uppercase(), Span::call_site());
     let block_name_lower = Ident::new(&block.name.to_lowercase(), Span::call_site());
 
-    let mut reserved_counter: usize = 0;
     let mut current_bytes: usize = 0;
     let register_defs: Vec<TokenStream> = block.registers.iter()
-        .filter_map(|ror| match ror {
-            RegisterOrReserved::Register(r) => {
-                current_bytes += usize::from(r.size_bytes);
-                Some(serialize_register_def(r))
-            },
-            RegisterOrReserved::Reserved(r) => {
-                current_bytes += usize::from(r.size_bytes);
-                None
-            },
+        .filter_map(|ror| {
+            current_bytes += usize::from(ror.size_bytes());
+            match ror {
+                RegisterOrReserved::Register(r) => Some(serialize_register_def(r)),
+                RegisterOrReserved::Reserved(_) => None,
+            }
         })
         .collect();
+    let mut reserved_counter: usize = 0;
     let register_fields: Vec<TokenStream> = block.registers.iter()
         .map(|ror| serialize_register_field(&block_name_lower, ror, &mut reserved_counter))
         .collect();
+
+    let impl_default = if block.has_default() {
+        reserved_counter = 0;
+        let register_default_entries: Vec<TokenStream> = block.registers.iter()
+            .filter_map(|ror| match ror {
+                RegisterOrReserved::Register(r) => {
+                    if r.default_value.is_some() {
+                        let register_name_lower = Ident::new(&r.name.to_lowercase(), Span::call_site());
+                        let register_name_upper = Ident::new(&r.name.to_uppercase(), Span::call_site());
+                        Some(quote! { #register_name_lower : #block_name_lower :: #register_name_upper :: const_default () , })
+                    } else {
+                        None
+                    }
+                },
+                RegisterOrReserved::Reserved(r) => {
+                    let ident = format_ident!("_reserved{}", reserved_counter);
+                    let size = usize::from(r.size_bytes);
+                    reserved_counter += 1;
+                    Some(quote! { #ident : [ 0u8 ; #size ] , })
+                },
+            })
+            .collect();
+        quote! {
+            impl #block_name_upper {
+                #[inline]
+                pub const fn const_default() -> Self {
+                    Self {
+                        #( #register_default_entries )*
+                    }
+                }
+            }
+            impl Default for #block_name_upper {
+                fn default() -> Self { Self::const_default() }
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     quote! {
         pub mod #block_name_lower {
@@ -212,6 +254,8 @@ fn serialize_block_def(block: &Block) -> TokenStream {
         pub struct #block_name_upper {
             #( #register_fields )*
         }
+
+        #impl_default
     }
 }
 
@@ -235,6 +279,33 @@ fn serialize_group(group: &Group) -> TokenStream {
         .map(|b| serialize_block_field(&group_name_lower, b))
         .collect();
 
+    let impl_default = if group.has_default() {
+        let block_defaults = group.blocks.iter()
+            .map(|b| {
+                let block_name_upper = Ident::new(&b.name.to_uppercase(), Span::call_site());
+                let block_name_lower = Ident::new(&b.name.to_lowercase(), Span::call_site());
+
+                quote! {
+                    #block_name_lower : #group_name_lower :: #block_name_upper :: const_default () ,
+                }
+            });
+        quote! {
+            impl #group_name_upper {
+                #[inline]
+                pub const fn const_default() -> Self {
+                    Self {
+                        #( #block_defaults )*
+                    }
+                }
+            }
+            impl Default for #group_name_upper {
+                fn default() -> Self { Self::const_default() }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         #![allow(non_camel_case_types)]
 
@@ -246,6 +317,8 @@ fn serialize_group(group: &Group) -> TokenStream {
         pub struct #group_name_upper {
             #( #group_block_fields )*
         }
+
+        #impl_default
     }
 }
 
