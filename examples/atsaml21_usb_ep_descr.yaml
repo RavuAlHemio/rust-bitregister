@@ -2,24 +2,30 @@ name: EP_DESCR
 blocks:
   - name: BANK0
     registers:
-      - name: ADDR
+      - type: register
+        name: ADDR
         size_bytes: 4
         default_value: 0
         fields:
-          - name: ADDR
+          - type: variable
+            name: ADDR
             start_bit: 0
             bit_count: 32
-      - name: PCKSIZE
+      - type: register
+        name: PCKSIZE
         size_bytes: 4
         default_value: 0
         fields:
-          - name: BYTE_COUNT
+          - type: variable
+            name: BYTE_COUNT
             start_bit: 0
             bit_count: 14
-          - name: MULTI_PACKET_SIZE
+          - type: variable
+            name: MULTI_PACKET_SIZE
             start_bit: 14
             bit_count: 14
-          - name: SIZE
+          - type: variable
+            name: SIZE
             start_bit: 28
             bit_count: 3
             values:
@@ -39,51 +45,64 @@ blocks:
                 value: 6
               - name: BYTES1023
                 value: 7
-          - name: AUTO_ZLP
+          - type: variable
+            name: AUTO_ZLP
             start_bit: 31
             bit_count: 1
-      - name: EXTREG
+      - type: register
+        name: EXTREG
         size_bytes: 4
         default_value: 0
         fields:
-          - name: SUBPID
+          - type: variable
+            name: SUBPID
             start_bit: 0
             bit_count: 4
-          - name: VARIABLE
+          - type: variable
+            name: VARIABLE
             start_bit: 4
             bit_count: 11
-      - name: STATUS_BK
+      - type: register
+        name: STATUS_BK
         size_bytes: 1
         default_value: 0
         fields:
-          - name: CRCERR
+          - type: variable
+            name: CRCERR
             start_bit: 0
             bit_count: 1
-          - name: ERRORFLOW
+          - type: variable
+            name: ERRORFLOW
             start_bit: 0
             bit_count: 1
       - type: reserved
         size_bytes: 3
   - name: BANK1
     registers:
-      - name: ADDR
+      - type: register
+        name: ADDR
         size_bytes: 4
         default_value: 0
         fields:
-          - name: ADDR
+          - type: variable
+            name: ADDR
             start_bit: 0
             bit_count: 32
-      - name: PCKSIZE
+      - type: register
+        name: PCKSIZE
         size_bytes: 4
         default_value: 0
         fields:
-          - name: BYTE_COUNT
+          - type: variable
+            name: BYTE_COUNT
             start_bit: 0
             bit_count: 14
-          - name: MULTI_PACKET_SIZE
+          - type: variable
+            name: MULTI_PACKET_SIZE
             start_bit: 14
             bit_count: 14
-          - name: SIZE
+          - type: variable
+            name: SIZE
             start_bit: 28
             bit_count: 3
             values:
@@ -103,20 +122,24 @@ blocks:
                 value: 6
               - name: BYTES1023
                 value: 7
-          - name: AUTO_ZLP
+          - type: variable
+            name: AUTO_ZLP
             start_bit: 31
             bit_count: 1
       - type: reserved
         size_bytes: 4
-      - name: STATUS_BK
+      - type: register
+        name: STATUS_BK
         size_bytes: 1
         default_value: 0
         fields:
-          - name: CRCERR
+          - type: variable
+            name: CRCERR
             start_bit: 0
             bit_count: 1
-          - name: ERRORFLOW
-            start_bit: 0
+          - type: variable
+            name: ERRORFLOW
+            start_bit: 1
             bit_count: 1
       - type: reserved
         size_bytes: 3

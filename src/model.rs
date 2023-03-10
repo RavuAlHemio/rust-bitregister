@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 
-type NumericValue = u128;
+type NumericValue = u64;
 
 
 /// Grouping of functionally related register blocks.
@@ -21,11 +21,12 @@ pub struct Block {
     pub name: String,
 
     /// The registers or paddings in this block.
-    pub registers_or_paddings: Vec<RegisterOrReserved>,
+    pub registers: Vec<RegisterOrReserved>,
 }
 
 /// A register or padding value.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum RegisterOrReserved {
     /// A register.
     Register(Register),
@@ -61,6 +62,7 @@ pub struct ReservedValue {
 
 /// A fixed or variable field within a register.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Field {
     /// A fixed field.
     Fixed(FixedField),
@@ -79,12 +81,18 @@ pub struct FixedField {
     pub bit_count: u8,
 
     /// The fixed value of this field.
+    ///
+    /// Assumed to be 0 if not explicitly given.
+    #[serde(default)]
     pub value: NumericValue,
 }
 
 /// A variable-value field within a register.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct VariableField {
+    /// The name of the field.
+    pub name: String,
+
     /// The bit, counted from LSB, where the field starts within the register.
     pub start_bit: u8,
 
