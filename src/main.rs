@@ -104,7 +104,7 @@ fn serialize_register_def(register: &Register) -> TokenStream {
         let wf = quote! {
             #[inline(always)]
             pub fn write<'a>(&'a mut self) -> #register_writer_upper <'a> {
-                self.value = Self::default().value;
+                self.value = Self::const_default().value;
                 #register_writer_upper { register: self }
             }
         };
