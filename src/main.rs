@@ -47,7 +47,7 @@ fn serialize_field_reader(field: &VariableField) -> TokenStream {
     };
 
     quote! {
-        #[inline]
+        #[inline(always)]
         pub fn #field_name_lower (&self) -> #value_type_ident {
             ( ( self.register.value >> #shift_count ) & #bit_mask_at_lsb ) #conversion_tokens
         }
@@ -70,7 +70,7 @@ fn serialize_field_writer(register_backing_type: &Ident, field: &VariableField) 
     };
 
     quote! {
-        #[inline]
+        #[inline(always)]
         pub fn #field_name_lower (&mut self, value: #value_type_ident ) -> &mut Self {
             self.register.value = (self.register.value & ( #register_backing_type :: MAX ^ #bit_mask_in_position ))
                 | (( #value_numeric << #shift_count ) & #bit_mask_in_position);
@@ -102,14 +102,14 @@ fn serialize_register_def(register: &Register) -> TokenStream {
     let (write_func, const_default_func, default_impl, register_writer) = if let Some(default_value) = register.default_value {
         let default_value_token = Literal::u64_unsuffixed(default_value);
         let wf = quote! {
-            #[inline]
+            #[inline(always)]
             pub fn write<'a>(&'a mut self) -> #register_writer_upper <'a> {
                 self.value = Self::default().value;
                 #register_writer_upper { register: self }
             }
         };
         let cd = quote! {
-            #[inline]
+            #[inline(always)]
             pub const fn const_default() -> Self { Self { value: #default_value_token } }
         };
         let d = quote! {
@@ -147,7 +147,7 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             value: #register_backing_type ,
         }
         impl #register_name_upper {
-            #[inline]
+            #[inline(always)]
             pub fn read<'a>(&'a self) -> #register_reader_upper <'a> {
                 #register_reader_upper { register: self }
             }
@@ -231,7 +231,7 @@ fn serialize_block_def(block: &Block) -> TokenStream {
             .collect();
         quote! {
             impl #block_name_upper {
-                #[inline]
+                #[inline(always)]
                 pub const fn const_default() -> Self {
                     Self {
                         #( #register_default_entries )*
@@ -293,7 +293,7 @@ fn serialize_group(group: &Group) -> TokenStream {
             });
         quote! {
             impl #group_name_upper {
-                #[inline]
+                #[inline(always)]
                 pub const fn const_default() -> Self {
                     Self {
                         #( #block_defaults )*
