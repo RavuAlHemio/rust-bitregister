@@ -98,8 +98,14 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             Field::Fixed(_) => None,
         })
         .collect();
+    let register_writer_fields: Vec<TokenStream> = register.fields.iter()
+        .filter_map(|field| match field {
+            Field::Variable(f) => Some(serialize_field_writer(&register_backing_type, f)),
+            Field::Fixed(_) => None,
+        })
+        .collect();
 
-    let (write_func, const_default_func, default_impl, register_writer) = if let Some(default_value) = register.default_value {
+    let (write_func, const_default_func, default_impl) = if let Some(default_value) = register.default_value {
         let default_value_token = Literal::u64_unsuffixed(default_value);
         let wf = quote! {
             #[inline(always)]
@@ -117,27 +123,12 @@ fn serialize_register_def(register: &Register) -> TokenStream {
                 fn default() -> Self { Self::const_default() }
             }
         };
-        let register_writer_fields: Vec<TokenStream> = register.fields.iter()
-            .filter_map(|field| match field {
-                Field::Variable(f) => Some(serialize_field_writer(&register_backing_type, f)),
-                Field::Fixed(_) => None,
-            })
-            .collect();
-        let rw = quote! {
-            pub struct #register_writer_upper <'a> {
-                register: &'a mut #register_name_upper ,
-            }
-            impl<'a> #register_writer_upper <'a> {
-                #( #register_writer_fields )*
-            }
-        };
-        (wf, cd, d, rw)
+        (wf, cd, d)
     } else {
         let wf = quote! {};
         let cd = quote! {};
         let d = quote! {};
-        let rw = quote! {};
-        (wf, cd, d, rw)
+        (wf, cd, d)
     };
 
     quote! {
@@ -150,6 +141,11 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             #[inline(always)]
             pub fn read<'a>(&'a self) -> #register_reader_upper <'a> {
                 #register_reader_upper { register: self }
+            }
+
+            #[inline(always)]
+            pub fn modify<'a>(&'a mut self) -> #register_writer_upper <'a> {
+                #register_writer_upper { register: self }
             }
 
             #write_func
@@ -165,7 +161,12 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             #( #register_reader_funcs )*
         }
 
-        #register_writer
+        pub struct #register_writer_upper <'a> {
+            register: &'a mut #register_name_upper ,
+        }
+        impl<'a> #register_writer_upper <'a> {
+            #( #register_writer_fields )*
+        }
     }
 }
 
