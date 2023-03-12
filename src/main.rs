@@ -22,9 +22,9 @@ struct Opts {
     pub rust_file: PathBuf,
 }
 
-fn integer_type_for_bit_count(bit_count: u8) -> &'static str {
+fn integer_type_for_bit_count(bit_count: u8, is_enum: bool) -> &'static str {
     match bit_count {
-        1 => "bool",
+        1 => if is_enum { "u8" } else { "bool" },
         2..=8 => "u8",
         9..=16 => "u16",
         17..=32 => "u32",
@@ -33,40 +33,59 @@ fn integer_type_for_bit_count(bit_count: u8) -> &'static str {
     }
 }
 
-fn serialize_field_reader(field: &VariableField) -> TokenStream {
+fn serialize_field_reader(register_name_upper: &Ident, field: &VariableField) -> TokenStream {
     let field_name_lower = Ident::new(&field.name.to_lowercase(), Span::call_site());
-    let value_type = integer_type_for_bit_count(field.bit_count);
-    let value_type_ident = Ident::new(value_type, Span::call_site());
+    let field_repr_type = integer_type_for_bit_count(field.bit_count, field.values.is_some());
+    let value_type = if field.values.is_none() {
+        field_repr_type.to_owned()
+    } else {
+        format!("{}_{}_E", register_name_upper, field.name.to_uppercase())
+    };
+    let field_repr_type_ident = Ident::new(field_repr_type, Span::call_site());
+    let value_type_ident = Ident::new(&value_type, Span::call_site());
     let shift_count = Literal::u8_unsuffixed(field.start_bit);
     let bit_mask_at_lsb = Literal::u64_unsuffixed((1 << field.bit_count) - 1);
 
-    let conversion_tokens = if value_type == "bool" {
-        quote! { != 0 }
+    let decode_tokens = quote! {
+        ( self.register.value >> #shift_count ) & #bit_mask_at_lsb
+    };
+    let decode_and_convert_tokens = if field.values.is_some() {
+        // enum
+        quote! { #value_type_ident :: from_repr( ( #decode_tokens ) as #field_repr_type_ident ) }
+    } else if value_type == "bool" {
+        quote! { ( #decode_tokens ) != 0 }
     } else {
-        quote! { as #value_type_ident }
+        quote! { ( #decode_tokens ) as #value_type_ident }
     };
 
     quote! {
         #[inline(always)]
         pub fn #field_name_lower (&self) -> #value_type_ident {
-            ( ( self.register.value >> #shift_count ) & #bit_mask_at_lsb ) #conversion_tokens
+            #decode_and_convert_tokens
         }
     }
 }
 
-fn serialize_field_writer(register_backing_type: &Ident, field: &VariableField) -> TokenStream {
+fn serialize_field_writer(register_name_upper: &Ident, register_backing_type: &Ident, field: &VariableField) -> TokenStream {
     let field_name_lower = Ident::new(&field.name.to_lowercase(), Span::call_site());
-    let value_type = integer_type_for_bit_count(field.bit_count);
-    let value_type_ident = Ident::new(value_type, Span::call_site());
+    let value_type = if field.values.is_none() {
+        integer_type_for_bit_count(field.bit_count, false).to_owned()
+    } else {
+        format!("{}_{}_E", register_name_upper, field.name.to_uppercase())
+    };
+    let value_type_ident = Ident::new(&value_type, Span::call_site());
     let shift_count = Literal::u8_unsuffixed(field.start_bit);
 
     let bit_mask_value: u64 = (1 << field.bit_count) - 1;
     let bit_mask_in_position = Literal::u64_unsuffixed(bit_mask_value << field.start_bit);
 
-    let value_numeric = if value_type == "bool" {
+    let value_numeric = if field.values.is_some() {
+        // enum
+        quote! { ( value.to_repr() as #register_backing_type ) }
+    } else if value_type == "bool" {
         quote! { (if value { 1 as #register_backing_type } else { 0 as #register_backing_type }) }
     } else {
-        quote! { (value as #register_backing_type ) }
+        quote! { ( value as #register_backing_type ) }
     };
 
     quote! {
@@ -75,6 +94,88 @@ fn serialize_field_writer(register_backing_type: &Ident, field: &VariableField) 
             self.register.value = (self.register.value & ( #register_backing_type :: MAX ^ #bit_mask_in_position ))
                 | (( #value_numeric << #shift_count ) & #bit_mask_in_position);
             self
+        }
+    }
+}
+
+fn serialize_field_enum(register_name_upper: &Ident, field: &VariableField) -> TokenStream {
+    let values = field.values
+        .as_ref().expect("field without enumerated values");
+
+    let enum_name_upper = format_ident!("{}_{}_E", register_name_upper, field.name.to_uppercase());
+    let enum_repr_type = Ident::new(integer_type_for_bit_count(field.bit_count, field.values.is_some()), Span::call_site());
+
+    let variant_entries: Vec<TokenStream> = values.iter()
+        .map(|ve| {
+            let name = Ident::new(&ve.name, Span::call_site());
+            let value_literal = Literal::u64_unsuffixed(ve.value);
+            quote! { #name = #value_literal , }
+        })
+        .collect();
+    let from_repr_match_arms: Vec<TokenStream> = values.iter()
+        .map(|ve| {
+            let name = Ident::new(&ve.name, Span::call_site());
+            let value_literal = Literal::u64_unsuffixed(ve.value);
+            quote! { #value_literal => Self :: #name , }
+        })
+        .collect();
+    let to_repr_match_arms: Vec<TokenStream> = values.iter()
+        .map(|ve| {
+            let name = Ident::new(&ve.name, Span::call_site());
+            let value_literal = Literal::u64_unsuffixed(ve.value);
+            quote! { Self :: #name => #value_literal , }
+        })
+        .collect();
+
+    quote! {
+        #[derive(Clone, Copy, Debug)]
+        #[repr( #enum_repr_type )]
+        pub enum #enum_name_upper {
+            #( #variant_entries )*
+            Other( #enum_repr_type )
+        }
+        impl #enum_name_upper {
+            pub const fn from_repr( value: #enum_repr_type ) -> Self {
+                match value {
+                    #( #from_repr_match_arms )*
+                    other => Self::Other(other),
+                }
+            }
+
+            pub const fn to_repr(&self) -> #enum_repr_type {
+                match self {
+                    #( #to_repr_match_arms )*
+                    Self::Other(other) => *other,
+                }
+            }
+        }
+        impl ::core::cmp::PartialEq for #enum_name_upper {
+            fn eq( &self, other: & #enum_name_upper ) -> bool {
+                self.to_repr() == other.to_repr()
+            }
+        }
+        impl ::core::cmp::Eq for #enum_name_upper {
+        }
+        impl ::core::cmp::PartialOrd for #enum_name_upper {
+            fn partial_cmp( &self, other: & #enum_name_upper ) -> Option<::core::cmp::Ordering> {
+                self.to_repr().partial_cmp(&other.to_repr())
+            }
+        }
+        impl ::core::cmp::Ord for #enum_name_upper {
+            fn cmp( &self, other: & #enum_name_upper ) -> ::core::cmp::Ordering {
+                self.partial_cmp(other).unwrap()
+            }
+        }
+        impl ::core::hash::Hash for #enum_name_upper {
+            fn hash<H: ::core::hash::Hasher>(&self, state: &mut H) {
+                self.to_repr().hash(state)
+            }
+        }
+        impl ::core::convert::From< #enum_repr_type > for #enum_name_upper {
+            fn from( value: #enum_repr_type ) -> Self { Self::from_repr(value) }
+        }
+        impl ::core::convert::From< #enum_name_upper > for #enum_repr_type {
+            fn from( value: #enum_name_upper ) -> Self { value.to_repr() }
         }
     }
 }
@@ -92,15 +193,23 @@ fn serialize_register_def(register: &Register) -> TokenStream {
         other => panic!("unsupported register size {}", other),
     };
 
+    let register_enums: Vec<TokenStream> = register.fields.iter()
+        .filter_map(|field| match field {
+            Field::Variable(f) => Some(f),
+            Field::Fixed(_) => None,
+        })
+        .filter(|field| field.values.is_some())
+        .map(|field| serialize_field_enum(&register_name_upper, field))
+        .collect();
     let register_reader_funcs: Vec<TokenStream> = register.fields.iter()
         .filter_map(|field| match field {
-            Field::Variable(f) => Some(serialize_field_reader(f)),
+            Field::Variable(f) => Some(serialize_field_reader(&register_name_upper, f)),
             Field::Fixed(_) => None,
         })
         .collect();
     let register_writer_fields: Vec<TokenStream> = register.fields.iter()
         .filter_map(|field| match field {
-            Field::Variable(f) => Some(serialize_field_writer(&register_backing_type, f)),
+            Field::Variable(f) => Some(serialize_field_writer(&register_name_upper, &register_backing_type, f)),
             Field::Fixed(_) => None,
         })
         .collect();
@@ -132,6 +241,8 @@ fn serialize_register_def(register: &Register) -> TokenStream {
     };
 
     quote! {
+        #( #register_enums )*
+
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[repr(transparent)]
         pub struct #register_name_upper {
