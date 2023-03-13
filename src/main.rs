@@ -316,6 +316,11 @@ fn serialize_register_def(register: &Register) -> TokenStream {
         }
         impl #register_name_upper {
             #[inline(always)]
+            pub fn bits(&self) -> #register_backing_type {
+                self.value
+            }
+
+            #[inline(always)]
             pub fn read<'a>(&'a self) -> #register_reader_upper <'a> {
                 #register_reader_upper { register: self }
             }
