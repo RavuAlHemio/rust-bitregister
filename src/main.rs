@@ -186,6 +186,22 @@ fn serialize_field_enum(register_name_upper: &Ident, field: &VariableField) -> T
             quote! { Self :: #name => #value_literal , }
         })
         .collect();
+    let is_variant_funcs: Vec<TokenStream> = values.iter()
+        .map(|ve| {
+            let is_name = Ident::new(&format!("is_{}", ve.name.to_lowercase()), Span::call_site());
+            let name = Ident::new(&ve.name, Span::call_site());
+            quote! {
+                #[inline(always)]
+                pub fn #is_name (&self) -> bool {
+                    if let Self :: #name = self {
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
+        })
+        .collect();
 
     quote! {
         #[derive(Clone, Copy, Debug)]
@@ -206,6 +222,17 @@ fn serialize_field_enum(register_name_upper: &Ident, field: &VariableField) -> T
                 match self {
                     #( #to_repr_match_arms )*
                     Self::Other(other) => *other,
+                }
+            }
+
+            #( #is_variant_funcs )*
+
+            #[inline(always)]
+            pub fn as_other(&self) -> Option< #enum_repr_type > {
+                if let Self::Other(v) = self {
+                    Some(*v)
+                } else {
+                    None
                 }
             }
         }
