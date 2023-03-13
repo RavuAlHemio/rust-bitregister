@@ -66,8 +66,12 @@ fn serialize_field_reader(register_name_upper: &Ident, field: &VariableField) ->
     }
 }
 
-fn serialize_field_writer(register_name_upper: &Ident, register_backing_type: &Ident, field: &VariableField) -> TokenStream {
-    let field_name_lower = Ident::new(&field.name.to_lowercase(), Span::call_site());
+fn serialize_field_writer_struct(register_name_upper: &Ident, register_backing_type: &Ident, field: &VariableField) -> TokenStream {
+    let field_writer_name = format_ident!("{}_{}_FW", register_name_upper, field.name.to_uppercase());
+    let register_writer_name = format_ident!("{}_W", register_name_upper);
+    let bit_type = integer_type_for_bit_count(field.bit_count, false);
+    let bit_type_ident = Ident::new(bit_type, Span::call_site());
+
     let value_type = if field.values.is_none() {
         integer_type_for_bit_count(field.bit_count, false).to_owned()
     } else {
@@ -79,21 +83,77 @@ fn serialize_field_writer(register_name_upper: &Ident, register_backing_type: &I
     let bit_mask_value: u64 = (1 << field.bit_count) - 1;
     let bit_mask_in_position = Literal::u64_unsuffixed(bit_mask_value << field.start_bit);
 
-    let value_numeric = if field.values.is_some() {
-        // enum
-        quote! { ( value.to_repr() as #register_backing_type ) }
-    } else if value_type == "bool" {
+    let value_numeric = if value_type == "bool" {
         quote! { (if value { 1 as #register_backing_type } else { 0 as #register_backing_type }) }
     } else {
         quote! { ( value as #register_backing_type ) }
     };
+    let value_as_backing_type = if field.values.is_some() {
+        quote! { value.to_repr() }
+    } else {
+        quote! { value }
+    };
+
+    let no_variants = Vec::new();
+    let mut variant_functions: Vec<TokenStream> = field.values.as_ref()
+        .unwrap_or(&no_variants)
+        .iter()
+        .map(|ev| {
+            let value_name_lower = Ident::new(&ev.name.to_lowercase(), Span::call_site());
+            let value_name_upper = Ident::new(&ev.name.to_uppercase(), Span::call_site());
+            quote! {
+                #[inline(always)]
+                pub fn #value_name_lower (self) -> #register_writer_name <'a> {
+                    self.variant( #value_type_ident :: #value_name_upper )
+                }
+            }
+        })
+        .collect();
+    if value_type == "bool" {
+        variant_functions.push(quote! {
+            #[inline(always)]
+            pub fn set_bit(self) -> #register_writer_name <'a> {
+                self.variant(true)
+            }
+            #[inline(always)]
+            pub fn clear_bit(self) -> #register_writer_name <'a> {
+                self.variant(false)
+            }
+        })
+    }
+
+    quote! {
+        pub struct #field_writer_name <'a> {
+            register_writer: #register_writer_name <'a>,
+        }
+        impl<'a> #field_writer_name <'a> {
+            #[inline(always)]
+            pub unsafe fn bits( self, value: #bit_type_ident ) -> #register_writer_name <'a> {
+                self.register_writer.register.value = (self.register_writer.register.value & ( #register_backing_type :: MAX ^ #bit_mask_in_position ))
+                    | (( #value_numeric << #shift_count ) & #bit_mask_in_position);
+                self.register_writer
+            }
+
+            #[inline(always)]
+            pub fn variant( self, value: #value_type_ident ) -> #register_writer_name <'a> {
+                unsafe { self.bits( #value_as_backing_type ) }
+            }
+
+            #( #variant_functions )*
+        }
+    }
+}
+
+fn serialize_field_writer_func(register_name_upper: &Ident, field: &VariableField) -> TokenStream {
+    let field_writer_name = format_ident!("{}_{}_FW", register_name_upper, field.name.to_uppercase());
+    let field_name_lower = Ident::new(&field.name.to_lowercase(), Span::call_site());
 
     quote! {
         #[inline(always)]
-        pub fn #field_name_lower (&mut self, value: #value_type_ident ) -> &mut Self {
-            self.register.value = (self.register.value & ( #register_backing_type :: MAX ^ #bit_mask_in_position ))
-                | (( #value_numeric << #shift_count ) & #bit_mask_in_position);
-            self
+        pub fn #field_name_lower (self) -> #field_writer_name <'a> {
+            #field_writer_name {
+                register_writer: self,
+            }
         }
     }
 }
@@ -207,9 +267,15 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             Field::Fixed(_) => None,
         })
         .collect();
-    let register_writer_fields: Vec<TokenStream> = register.fields.iter()
+    let register_writer_structs: Vec<TokenStream> = register.fields.iter()
         .filter_map(|field| match field {
-            Field::Variable(f) => Some(serialize_field_writer(&register_name_upper, &register_backing_type, f)),
+            Field::Variable(f) => Some(serialize_field_writer_struct(&register_name_upper, &register_backing_type, f)),
+            Field::Fixed(_) => None,
+        })
+        .collect();
+    let register_writer_funcs: Vec<TokenStream> = register.fields.iter()
+        .filter_map(|field| match field {
+            Field::Variable(f) => Some(serialize_field_writer_func(&register_name_upper, f)),
             Field::Fixed(_) => None,
         })
         .collect();
@@ -276,8 +342,10 @@ fn serialize_register_def(register: &Register) -> TokenStream {
             register: &'a mut #register_name_upper ,
         }
         impl<'a> #register_writer_upper <'a> {
-            #( #register_writer_fields )*
+            #( #register_writer_funcs )*
         }
+
+        #( #register_writer_structs )*
     }
 }
 
