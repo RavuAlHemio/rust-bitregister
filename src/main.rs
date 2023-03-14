@@ -83,13 +83,17 @@ fn serialize_field_writer_struct(register_name_upper: &Ident, register_backing_t
     let bit_mask_value: u64 = (1 << field.bit_count) - 1;
     let bit_mask_in_position = Literal::u64_unsuffixed(bit_mask_value << field.start_bit);
 
-    let value_numeric = if value_type == "bool" {
+    let value_numeric = if bit_type == "bool" {
         quote! { (if value { 1 as #register_backing_type } else { 0 as #register_backing_type }) }
     } else {
         quote! { ( value as #register_backing_type ) }
     };
     let value_as_backing_type = if field.values.is_some() {
-        quote! { value.to_repr() }
+        if bit_type == "bool" {
+            quote! { value.to_repr() != 0 }
+        } else {
+            quote! { value.to_repr() }
+        }
     } else {
         quote! { value }
     };
